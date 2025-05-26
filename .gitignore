@@ -1,8 +1,15 @@
-# Python virtual environment
-venv/
+# Python virtual environment - More aggressive ignore
+venv/*
+!venv/bin/
+!venv/include/
+!venv/lib/
 .venv/
 env/
 .env/
+
+# Ignore all site-packages except specific requirements
+venv/lib/python*/site-packages/*
+!venv/lib/python*/site-packages/requirements.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
