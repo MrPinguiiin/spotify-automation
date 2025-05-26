@@ -1,0 +1,75 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Log files
+*.log
+spotify_automation.log
+
+# Sensitive data files
+vcc_data.txt
+reedemcode.txt
+
+# Browser-related files
+*.webdriver
+chromedriver
+geckodriver
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Selenium and WebDriver related
+*.exe
+*.log
+*.png
+
+# Credentials and sensitive information
+*.env
+.env
+*.key
+*.pem
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Backup files
+*.backup
+
+# Screenshots and debug files
+*.png
+signup_error.png
+recaptcha_fatal_error.png
+final_signup_error.png
+final_signup_fatal_error.png
+
+# Dependency directories
+lib/
+lib64/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Miscellaneous
+.temp/
+temp/ 
