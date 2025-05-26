@@ -2154,7 +2154,7 @@ class SpotifyAutomation:
     def fill_payment_form_manual(self):
         """
         Metode untuk mengisi form pembayaran kartu kredit secara manual
-        dengan data dari vcc_data.txt menggunakan JavaScript
+        menggunakan data dari vcc_data.txt dan JavaScript untuk iframe
         
         :return: Boolean
         """
@@ -2162,184 +2162,143 @@ class SpotifyAutomation:
             print(f"{Fore.CYAN}Mengisi form pembayaran kartu kredit...")
             print(f"{Fore.RED}⚠ PERINGATAN: Hanya untuk tujuan edukasi!")
             
-            # Tambahkan delay 2 detik
-            print(f"{Fore.YELLOW}Menunggu 2 detik sebelum mengisi form...")
-            time.sleep(2)
-            
-            # Navigasi keyboard
+            # Tunggu iframe muncul
             try:
-                # Persiapan ActionChains
-                actions = webdriver.ActionChains(self.driver)
-                
-                # Tekan Tab 2 kali
-                for _ in range(2):
-                    actions.send_keys(Keys.TAB).pause(0.5)
-                
-                # Eksekusi navigasi
-                actions.perform()
-                
-                print(f"{Fore.GREEN}✓ Berhasil navigasi keyboard!")
+                iframe = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[title='Card form']"))
+                )
+                print(f"{Fore.GREEN}✓ Iframe form pembayaran ditemukan!")
+            except Exception as e:
+                print(f"{Fore.RED}❌ Iframe form pembayaran tidak ditemukan: {e}")
+                return False
+
+            # Switch ke iframe
+            self.driver.switch_to.frame(iframe)
             
-            except Exception as keyboard_error:
-                print(f"{Fore.YELLOW}⚠ Gagal navigasi keyboard: {keyboard_error}")
-            
-            # Cek apakah ada data VCC
-            if not self.vcc_data:
-                print(f"{Fore.RED}❌ Tidak ada data kartu kredit tersedia!")
-                
-                # Tambahkan data dummy jika tidak ada
-                self.vcc_data.append({
+            # Pastikan vcc_data tersedia
+            if not hasattr(self, 'vcc_data') or not self.vcc_data:
+                self.vcc_data = [{
                     'number': '4596930078139128',
                     'month': '05',
                     'year': '2030',
-                    'cvv': '594',
-                    'name': 'Spotify Trial'
-                })
+                    'cvv': '594'
+                }]
             
-            # Gunakan data VCC pertama
-            vcc_info = self.vcc_data[0]
+            card_data = self.vcc_data[0]
             
-            # Script JavaScript komprehensif untuk mencari dan mengisi form
-            fill_payment_form_script = f"""
-            (function() {{
-                // Fungsi untuk mencari input berdasarkan berbagai kriteria
-                function findInputField(selectors) {{
-                    for (let selector of selectors) {{
-                        let input = document.querySelector(selector);
-                        if (input) return input;
-                    }}
-                    return null;
+            # Tunggu form dalam iframe dimuat
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "cardnumber"))
+                )
+            except:
+                print(f"{Fore.RED}❌ Form dalam iframe tidak dimuat!")
+                return False
+
+            # Script JavaScript untuk mengisi form
+            fill_form_script = f"""
+                // Fungsi untuk trigger event
+                function triggerEvent(element, eventType) {{
+                    const event = new Event(eventType, {{ bubbles: true }});
+                    element.dispatchEvent(event);
                 }}
 
-                // Fungsi untuk mengisi input dengan validasi
-                function fillInput(input, value) {{
-                    if (!input) return false;
-                    
-                    // Focus dan clear input
-                    input.focus();
-                    input.value = '';
-                    
-                    // Isi input karakter per karakter
+                // Fungsi untuk mengisi input dengan delay
+                async function fillInput(element, value) {{
+                    element.value = '';
                     for (let char of value) {{
-                        input.value += char;
-                        
-                        // Trigger events
-                        ['input', 'change'].forEach(eventType => {{
-                            input.dispatchEvent(new Event(eventType, {{ bubbles: true }}));
-                        }});
+                        element.value += char;
+                        triggerEvent(element, 'input');
+                        await new Promise(resolve => setTimeout(resolve, 100));
                     }}
-                    
-                    return true;
+                    triggerEvent(element, 'change');
                 }}
 
-                // Daftar selector untuk nomor kartu
-                const cardNumberSelectors = [
-                    'input[placeholder="0000 0000 0000 0000"]',
-                    'input[data-testid="card-number-input"]',
-                    'input[name="cardnumber"]',
-                    '#cardnumber'
-                ];
+                // Fungsi utama pengisian form
+                async function fillForm() {{
+                    const cardNumber = document.getElementById('cardnumber');
+                    const expiryDate = document.getElementById('expiry-date');
+                    const securityCode = document.getElementById('security-code');
 
-                // Daftar selector untuk tanggal kadaluarsa
-                const expirySelectors = [
-                    'input[placeholder="MM / YY"]',
-                    'input[data-testid="expiry-date-input"]',
-                    'input[name="expiry"]',
-                    '#expiry-date'
-                ];
+                    if (cardNumber && expiryDate && securityCode) {{
+                        await fillInput(cardNumber, '{card_data["number"]}');
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        const expiry = '{card_data["month"]}/{card_data["year"][-2:]}';
+                        await fillInput(expiryDate, expiry);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        await fillInput(securityCode, '{card_data["cvv"]}');
+                        return true;
+                    }}
+                    return false;
+                }}
 
-                // Daftar selector untuk CVV
-                const cvvSelectors = [
-                    'input[placeholder=" "]',
-                    'input[data-testid="security-code-input"]',
-                    'input[name="security-code"]',
-                    '#security-code'
-                ];
-
-                // Cari input
-                const cardNumberInput = findInputField(cardNumberSelectors);
-                const expiryInput = findInputField(expirySelectors);
-                const cvvInput = findInputField(cvvSelectors);
-
-                // Isi input
-                const cardNumberFilled = fillInput(cardNumberInput, '{vcc_info['number']}');
-                const expiryFilled = fillInput(expiryInput, '{vcc_info['month']} / {vcc_info['year'][-2:]}');
-                const cvvFilled = fillInput(cvvInput, '{vcc_info['cvv']}');
-
-                // Return status
-                return {{
-                    cardNumberFound: !!cardNumberInput,
-                    expiryFound: !!expiryInput,
-                    cvvFound: !!cvvInput,
-                    cardNumberFilled: cardNumberFilled,
-                    expiryFilled: expiryFilled,
-                    cvvFilled: cvvFilled
-                }};
-            }})();
+                return fillForm();
             """
+
+            # Eksekusi script
+            success = self.driver.execute_script(fill_form_script)
             
-            # Eksekusi script JavaScript
-            result = self.driver.execute_script(fill_payment_form_script)
-            
-            # Validasi hasil
-            if not result['cardNumberFound']:
-                print(f"{Fore.RED}❌ Tidak dapat menemukan field nomor kartu!")
-                
-                # Debugging tambahan
-                try:
-                    input_fields = self.driver.find_elements(By.TAG_NAME, 'input')
-                    print(f"{Fore.YELLOW}Input fields yang tersedia:")
-                    for field in input_fields:
-                        print(f"  - ID: {field.get_attribute('id')}")
-                        print(f"  - Name: {field.get_attribute('name')}")
-                        print(f"  - Placeholder: {field.get_attribute('placeholder')}")
-                        print(f"  - Type: {field.get_attribute('type')}")
-                        print(f"  - Class: {field.get_attribute('class')}")
-                        print(f"  - Data-testid: {field.get_attribute('data-testid')}")
-                        print("---")
-                except Exception as debug_error:
-                    print(f"{Fore.YELLOW}Gagal mendapatkan informasi debug: {debug_error}")
-                
+            if success:
+                print(f"{Fore.GREEN}✓ Berhasil mengisi form pembayaran!")
+            else:
+                print(f"{Fore.RED}❌ Gagal mengisi form pembayaran!")
                 return False
+
+            # Kembali ke frame utama
+            self.driver.switch_to.default_content()
             
-            if not result['expiryFound']:
-                print(f"{Fore.RED}❌ Tidak dapat menemukan field tanggal kadaluarsa!")
-                return False
-            
-            if not result['cvvFound']:
-                print(f"{Fore.RED}❌ Tidak dapat menemukan field CVV!")
-                return False
-            
-            # Validasi pengisian
-            if not result['cardNumberFilled']:
-                print(f"{Fore.RED}❌ Gagal mengisi nomor kartu!")
-                return False
-            
-            if not result['expiryFilled']:
-                print(f"{Fore.RED}❌ Gagal mengisi tanggal kadaluarsa!")
-                return False
-            
-            if not result['cvvFilled']:
-                print(f"{Fore.RED}❌ Gagal mengisi CVV!")
-                return False
-            
-            print(f"{Fore.GREEN}✓ Berhasil mengisi form pembayaran!")
-            
-            # Tambahan: Tunggu sebentar
+            # Tunggu 1 detik
             time.sleep(1)
             
+            # Klik tombol Complete purchase
+            try:
+                # Coba berbagai selector untuk tombol
+                purchase_button_selectors = [
+                    (By.ID, "checkout_submit"),
+                    (By.CSS_SELECTOR, "button[data-encore-id='buttonPrimary']"),
+                    (By.XPATH, "//button[contains(@class, 'e-9916-button-primary')]"),
+                    (By.XPATH, "//button[contains(text(), 'Complete purchase')]")
+                ]
+                
+                purchase_button = None
+                for selector_type, selector in purchase_button_selectors:
+                    try:
+                        purchase_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((selector_type, selector))
+                        )
+                        break
+                    except:
+                        continue
+                
+                if purchase_button:
+                    # Scroll ke tombol
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
+                    time.sleep(0.5)
+                    
+                    # Klik tombol dengan JavaScript
+                    self.driver.execute_script("arguments[0].click();", purchase_button)
+                    print(f"{Fore.GREEN}✓ Berhasil mengklik tombol Complete purchase!")
+                else:
+                    print(f"{Fore.RED}❌ Tombol Complete purchase tidak ditemukan!")
+                    return False
+                
+            except Exception as e:
+                print(f"{Fore.RED}❌ Gagal mengklik tombol Complete purchase: {e}")
+                return False
+            
             return True
-        
+            
         except Exception as e:
             print(f"{Fore.RED}❌ Kesalahan saat mengisi form pembayaran: {e}")
             
-            # Tangkap screenshot untuk debugging
+            # Pastikan kembali ke frame utama
             try:
-                self.driver.save_screenshot("payment_form_error.png")
-                print(f"{Fore.YELLOW}Screenshot error disimpan sebagai payment_form_error.png")
+                self.driver.switch_to.default_content()
             except:
                 pass
-            
+                
             return False
 
 def main():
