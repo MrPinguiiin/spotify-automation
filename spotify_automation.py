@@ -1643,7 +1643,7 @@ class SpotifyAutomation:
                 # Strategi 2: Trigger Enter pada field password
                 lambda: self.trigger_enter_key(password_field),
                 
-                # Strategi 3: Cari dan klik tombol terdekat
+                # Strategi 3: JavaScript click pada tombol terdekat
                 lambda: self.click_nearest_button(password_field),
                 
                 # Strategi 4: JavaScript click pada tombol submit
@@ -1729,8 +1729,26 @@ class SpotifyAutomation:
             # Setup proxy jika ada
             options = self.setup_proxy(options)
             
-            # Inisiasi driver
-            self.driver = uc.Chrome(options=options)
+            # Inisiasi driver dengan penanganan kesalahan
+            try:
+                # Coba dengan path ChromeDriver manual
+                chromedriver_path = os.path.expanduser('~/.local/bin/chromedriver-linux64/chromedriver')
+                
+                # Metode 1: Undetected ChromeDriver
+                self.driver = uc.Chrome(
+                    driver_executable_path=chromedriver_path, 
+                    options=options
+                )
+            except Exception as driver_error:
+                print(f"{Fore.RED}❌ Kesalahan inisiasi driver: {driver_error}")
+                print(f"{Fore.YELLOW}Mencoba metode alternatif...")
+                
+                # Metode alternatif: Gunakan ChromeDriverManager
+                from webdriver_manager.chrome import ChromeDriverManager
+                from selenium.webdriver.chrome.service import Service
+                
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=options)
             
             # Jalankan proses pembuatan akun
             account_data = self.create_account()
@@ -1744,10 +1762,16 @@ class SpotifyAutomation:
             
         except Exception as e:
             print(f"{Fore.RED}❌ Automation error: {str(e)}")
+            # Tambahkan detail error untuk debugging
+            import traceback
+            traceback.print_exc()
         
         finally:
-            if self.driver:
-                self.driver.quit()
+            if hasattr(self, 'driver'):
+                try:
+                    self.driver.quit()
+                except:
+                    pass
 
 def main():
     print(f"{Fore.RED}{'='*60}")

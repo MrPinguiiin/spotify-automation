@@ -1,62 +1,37 @@
-# Python virtual environment - More aggressive ignore
-venv/*
-!venv/bin/
-!venv/include/
-!venv/lib/
+# Python virtual environment - Comprehensive ignore
+venv/
 .venv/
 env/
 .env/
-
-# Ignore all site-packages except specific requirements
-venv/lib/python*/site-packages/*
-!venv/lib/python*/site-packages/requirements.txt
-
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Log files
+# Dependency directories
+lib/
+lib64/
+*.egg-info/
+dist/
+build/
+
+# Logs and databases
 *.log
+*.sqlite3
+*.db
 spotify_automation.log
 
-# Sensitive data files
-vcc_data.txt
-reedemcode.txt
-
-# Browser-related files
+# Browser and WebDriver files
 *.webdriver
 chromedriver
 geckodriver
-
-# Operating System files
-.DS_Store
-Thumbs.db
-
-# IDE and Editor files
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Selenium and WebDriver related
 *.exe
-*.log
-*.png
 
-# Credentials and sensitive information
-*.env
-.env
+# Sensitive data
+vcc_data.txt
+reedemcode.txt
 *.key
 *.pem
-
-# Temporary files
-*.tmp
-*.bak
-*.swp
-
-# Backup files
-*.backup
+.env
 
 # Screenshots and debug files
 *.png
@@ -65,18 +40,29 @@ recaptcha_fatal_error.png
 final_signup_error.png
 final_signup_fatal_error.png
 
-# Dependency directories
-lib/
-lib64/
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+.temp/
+temp/
+
+# Backup files
+*.backup
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Miscellaneous
-.temp/
-temp/ 
+# Selenium and browser-related
+*.log
+*.cache 
