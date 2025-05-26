@@ -31,6 +31,7 @@ import logging
 import requests
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.select import Select
+import re
 
 # Initialize colorama
 init(autoreset=True)
@@ -72,30 +73,60 @@ class SpotifyAutomation:
         
         self.vpn_country = vpn_country
         self.vcc_data = []
-        self.load_vcc_data()
+        if not self.load_vcc_data():
+            print(f"{Fore.YELLOW}⚠ Tidak ada data kartu kredit yang valid!")
+            # Tambahkan data dummy jika diperlukan
+            self.vcc_data.append({
+                'number': '4111111111111111',
+                'month': '12',
+                'year': '2025',
+                'cvv': '123',
+                'name': 'Spotify Trial'
+            })
         
     def load_vcc_data(self):
         """Load VCC data from file"""
         try:
             with open('vcc_data.txt', 'r') as file:
                 for line in file:
-                    if line.strip():
-                        parts = line.strip().split(',')
-                        if len(parts) >= 5:
-                            vcc_info = {
-                                'number': parts[0],
-                                'month': parts[1],
-                                'year': parts[2],
-                                'cvv': parts[3],
-                                'name': parts[4]
-                            }
-                            self.vcc_data.append(vcc_info)
+                    # Hapus whitespace dan baris kosong
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # Split dengan delimiter '|'
+                    parts = line.split('|')
+                    
+                    # Validasi jumlah bagian
+                    if len(parts) >= 4:
+                        vcc_info = {
+                            'number': parts[0].replace(' ', ''),  # Hapus spasi
+                            'month': parts[1].zfill(2),  # Pastikan 2 digit
+                            'year': parts[2],
+                            'cvv': parts[3],
+                            # Tambahkan nama default jika tidak ada
+                            'name': 'Spotify Trial' if len(parts) < 5 else parts[4]
+                        }
+                        self.vcc_data.append(vcc_info)
             
-            print(f"{Fore.GREEN}✓ Loaded {len(self.vcc_data)} VCC data entries")
+            # Cetak detail untuk debugging
+            print(f"{Fore.GREEN}✓ Berhasil memuat {len(self.vcc_data)} data kartu kredit")
             
+            # Cetak detail kartu untuk konfirmasi
+            for idx, card in enumerate(self.vcc_data, 1):
+                print(f"{Fore.CYAN}Kartu {idx}:")
+                print(f"  Nomor: {card['number']}")
+                print(f"  Kadaluarsa: {card['month']}/{card['year']}")
+                print(f"  CVV: {card['cvv']}")
+            
+            return len(self.vcc_data) > 0
+        
         except FileNotFoundError:
-            print(f"{Fore.RED}✗ VCC data file not found!")
-            self.vcc_data = []
+            print(f"{Fore.RED}❌ File vcc_data.txt tidak ditemukan!")
+            return False
+        except Exception as e:
+            print(f"{Fore.RED}❌ Kesalahan saat memuat data kartu kredit: {e}")
+            return False
     
     def setup_proxy(self, options):
         """Setup proxy for the webdriver"""
@@ -1449,6 +1480,11 @@ class SpotifyAutomation:
             # Simpan URL saat ini
             current_url = self.driver.current_url
             
+            # Daftar URL free trial/pembayaran Spotify
+            free_trial_urls = [
+                'https://www.spotify.com/au/purchase/offer/default-intro?country=AU'
+            ]
+            
             # Tunggu sebentar untuk memastikan halaman dimuat
             time.sleep(2)
             
@@ -1547,8 +1583,110 @@ class SpotifyAutomation:
                     # Tunggu navigasi
                     time.sleep(3)
                     
-                    print(f"{Fore.GREEN}✓ Berhasil klik tombol Continue!")
-                    return True
+                    # Cek URL setelah klik Continue
+                    new_url = self.driver.current_url
+                    
+                    # Pola URL pembayaran Spotify
+                    payment_url_pattern = r'https://payments\.spotify\.com/checkout/[a-f0-9-]+/\?country=\w+&market=\w+&product=default-intro'
+                    
+                    # Validasi URL pembayaran
+                    if re.match(payment_url_pattern, new_url):
+                        print(f"{Fore.GREEN}✓ Berhasil redirect ke halaman pembayaran!")
+                        print(f"{Fore.CYAN}URL Pembayaran: {new_url}")
+                        
+                        # Log URL pembayaran ke file
+                        try:
+                            with open('payment_urls.txt', 'a') as f:
+                                f.write(f"{new_url}\n")
+                            print(f"{Fore.GREEN}✓ URL pembayaran disimpan di payment_urls.txt")
+                        except Exception as log_error:
+                            print(f"{Fore.YELLOW}⚠ Gagal menyimpan URL: {log_error}")
+                        
+                        # Navigasi keyboard
+                        try:
+                            # Persiapan ActionChains
+                            actions = webdriver.ActionChains(self.driver)
+                            
+                            # Tekan Tab sebanyak 8 kali
+                            for _ in range(8):
+                                actions.send_keys(Keys.TAB).pause(0.1)
+                            
+                            # Eksekusi navigasi Tab
+                            actions.perform()
+                            
+                            # Tunggu sebentar
+                            time.sleep(0.7)
+                            
+                            # Tekan Enter
+                            actions.send_keys(Keys.ENTER).perform()
+                            
+                            print(f"{Fore.GREEN}✓ Berhasil navigasi keyboard!")
+                        
+                        except Exception as keyboard_error:
+                            print(f"{Fore.YELLOW}⚠ Gagal navigasi keyboard: {keyboard_error}")
+                        
+                        return True
+                    
+                    # Jika URL tidak sesuai, coba redirect manual
+                    for url in free_trial_urls:
+                        try:
+                            print(f"{Fore.CYAN}Mencoba redirect manual ke: {url}")
+                            
+                            # Tambahkan delay 3-5 detik sebelum redirect
+                            delay = random.uniform(3, 5)
+                            print(f"{Fore.YELLOW}Menunggu {delay:.2f} detik sebelum redirect...")
+                            time.sleep(delay)
+                            
+                            self.driver.get(url)
+                            
+                            # Tunggu halaman dimuat
+                            WebDriverWait(self.driver, 10).until(
+                                EC.presence_of_element_located((By.TAG_NAME, 'body'))
+                            )
+                            
+                            # Validasi halaman
+                            current_url = self.driver.current_url
+                            if 'payments.spotify.com/checkout' in current_url:
+                                print(f"{Fore.GREEN}✓ Berhasil redirect ke halaman pembayaran!")
+                                print(f"{Fore.CYAN}URL Pembayaran: {current_url}")
+                                
+                                # Log URL pembayaran
+                                try:
+                                    with open('payment_urls.txt', 'a') as f:
+                                        f.write(f"{current_url}\n")
+                                    print(f"{Fore.GREEN}✓ URL pembayaran disimpan di payment_urls.txt")
+                                except Exception as log_error:
+                                    print(f"{Fore.YELLOW}⚠ Gagal menyimpan URL: {log_error}")
+                                
+                                # Navigasi keyboard
+                                try:
+                                    # Persiapan ActionChains
+                                    actions = webdriver.ActionChains(self.driver)
+                                    
+                                    # Tekan Tab sebanyak 8 kali
+                                    for _ in range(8):
+                                        actions.send_keys(Keys.TAB).pause(0.1)
+                                    
+                                    # Eksekusi navigasi Tab
+                                    actions.perform()
+                                    
+                                    # Tunggu sebentar
+                                    time.sleep(0.7)
+                                    
+                                    # Tekan Enter
+                                    actions.send_keys(Keys.ENTER).perform()
+                                    
+                                    print(f"{Fore.GREEN}✓ Berhasil navigasi keyboard!")
+                                
+                                except Exception as keyboard_error:
+                                    print(f"{Fore.YELLOW}⚠ Gagal navigasi keyboard: {keyboard_error}")
+                                
+                                return True
+                        except Exception as redirect_error:
+                            print(f"{Fore.YELLOW}⚠ Gagal redirect: {redirect_error}")
+                    
+                    print(f"{Fore.YELLOW}⚠ URL tidak sesuai pola pembayaran: {new_url}")
+                    return False
                 
                 except Exception as continue_error:
                     print(f"{Fore.YELLOW}⚠ Gagal klik tombol Continue: {continue_error}")
@@ -1566,6 +1704,228 @@ class SpotifyAutomation:
             except:
                 pass
             
+            return False
+    
+    def generate_random_checkout_id(self, length=36):
+        """
+        Generate random checkout ID untuk URL Spotify
+        
+        :param length: Panjang ID checkout
+        :return: String checkout ID
+        """
+        import uuid
+        return str(uuid.uuid4())
+
+    def redirect_to_payment_page(self):
+        """
+        Metode untuk redirect ke halaman pembayaran/free trial Spotify
+        
+        :return: Boolean
+        """
+        try:
+            # Daftar URL potensial untuk free trial/pembayaran
+            payment_urls = [
+                'https://www.spotify.com/au/purchase/offer/default-intro?country=AU'
+            ]
+            
+            # Metode redirect dengan berbagai strategi
+            redirect_strategies = [
+                # Strategi 1: Direct navigation
+                lambda url: self.driver.get(url),
+                
+                # Strategi 2: JavaScript navigation
+                lambda url: self.driver.execute_script(f"window.location.href = '{url}'"),
+                
+                # Strategi 3: Advanced navigation dengan manipulasi history
+                lambda url: self.driver.execute_script(f"""
+                    history.pushState(null, null, '{url}');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                """)
+            ]
+            
+            # Coba setiap URL dengan setiap strategi
+            for url in payment_urls:
+                for strategy in redirect_strategies:
+                    try:
+                        print(f"{Fore.CYAN}Mencoba redirect ke: {url}")
+                        
+                        # Jalankan strategi redirect
+                        strategy(url)
+                        
+                        # Tunggu halaman dimuat
+                        WebDriverWait(self.driver, 10).until(
+                            EC.presence_of_element_located((By.TAG_NAME, 'body'))
+                        )
+                        
+                        # Validasi halaman
+                        current_url = self.driver.current_url
+                        
+                        # Pola URL pembayaran Spotify
+                        payment_url_patterns = [
+                            r'https://www\.spotify\.com/\w+/purchase/offer/default-intro\?country=\w+',
+                            r'https://payments\.spotify\.com/checkout/[a-f0-9-]+/\?country=\w+&market=\w+&product=default-intro'
+                        ]
+                        
+                        # Cek apakah URL cocok dengan pola
+                        url_match = any(re.search(pattern, current_url) for pattern in payment_url_patterns)
+                        
+                        if url_match:
+                            print(f"{Fore.GREEN}✓ Berhasil redirect ke halaman pembayaran!")
+                            print(f"{Fore.CYAN}URL Pembayaran: {current_url}")
+                            
+                            # Log URL pembayaran
+                            try:
+                                with open('payment_urls.txt', 'a') as f:
+                                    f.write(f"{current_url}\n")
+                                print(f"{Fore.GREEN}✓ URL pembayaran disimpan di payment_urls.txt")
+                            except Exception as log_error:
+                                print(f"{Fore.YELLOW}⚠ Gagal menyimpan URL: {log_error}")
+                            
+                            # Tambahkan delay 2 detik
+                            time.sleep(2)
+                            
+                            # Navigasi keyboard
+                            try:
+                                # Persiapan ActionChains
+                                actions = webdriver.ActionChains(self.driver)
+                                
+                                # Tekan Tab sebanyak 8 kali dengan delay 1 detik per klik
+                                for _ in range(8):
+                                    actions.send_keys(Keys.TAB)
+                                    actions.pause(1)
+                                
+                                # Eksekusi navigasi Tab
+                                actions.perform()
+                                
+                                # Tekan Enter
+                                actions.send_keys(Keys.ENTER).perform()
+                                
+                                print(f"{Fore.GREEN}✓ Berhasil navigasi keyboard!")
+                            
+                            except Exception as keyboard_error:
+                                print(f"{Fore.YELLOW}⚠ Gagal navigasi keyboard: {keyboard_error}")
+                            
+                            return True
+                    
+                    except Exception as redirect_error:
+                        print(f"{Fore.YELLOW}⚠ Gagal redirect: {redirect_error}")
+            
+            print(f"{Fore.RED}❌ Gagal redirect ke halaman pembayaran!")
+            return False
+        
+        except Exception as e:
+            print(f"{Fore.RED}❌ Kesalahan fatal saat redirect: {e}")
+            return False
+
+    def select_payment_method(self):
+        """
+        Metode untuk memilih metode pembayaran kartu kredit/debit secara otomatis
+        
+        :return: Boolean
+        """
+        try:
+            print(f"{Fore.CYAN}Memilih metode pembayaran kartu kredit/debit...")
+            
+            # Strategi pencarian elemen radio button
+            payment_method_strategies = [
+                # Strategi 1: Pencarian dengan ID spesifik
+                lambda: self.driver.find_element(By.ID, "option-cards"),
+                
+                # Strategi 2: Pencarian dengan XPath
+                lambda: self.driver.find_element(By.XPATH, "//input[@type='radio' and @id='option-cards']"),
+                
+                # Strategi 3: Pencarian dengan atribut data-encore-id
+                lambda: self.driver.find_element(By.XPATH, "//input[@data-encore-id='visuallyHidden' and @id='option-cards']"),
+                
+                # Strategi 4: Pencarian dengan label terkait
+                lambda: self.driver.find_element(By.XPATH, "//label[contains(text(), 'Credit or debit card')]//preceding-sibling::input[@type='radio']")
+            ]
+            
+            # Variabel untuk menyimpan elemen radio button
+            radio_button = None
+            
+            # Coba setiap strategi pencarian
+            for strategy in payment_method_strategies:
+                try:
+                    potential_element = strategy()
+                    
+                    # Validasi elemen
+                    if (potential_element and 
+                        potential_element.is_displayed() or 
+                        potential_element.get_attribute('class').find('visually-hidden') != -1):
+                        radio_button = potential_element
+                        break
+                except Exception as strategy_error:
+                    print(f"{Fore.YELLOW}⚠ Strategi pencarian gagal: {strategy_error}")
+                    continue
+            
+            # Jika tidak ditemukan elemen
+            if not radio_button:
+                print(f"{Fore.RED}❌ Tidak dapat menemukan radio button metode pembayaran!")
+                
+                # Debugging: Cetak semua input radio
+                try:
+                    radio_inputs = self.driver.find_elements(By.XPATH, "//input[@type='radio']")
+                    print(f"{Fore.YELLOW}Input radio yang tersedia:")
+                    for input_el in radio_inputs:
+                        print(f"  - ID: {input_el.get_attribute('id')}")
+                        print(f"  - Name: {input_el.get_attribute('name')}")
+                        print(f"  - Value: {input_el.get_attribute('value')}")
+                        print(f"  - Displayed: {input_el.is_displayed()}")
+                        print(f"  - Enabled: {input_el.is_enabled()}")
+                        print("---")
+                except Exception as debug_error:
+                    print(f"{Fore.YELLOW}Gagal mendapatkan informasi debug: {debug_error}")
+                
+                return False
+            
+            # Scroll ke elemen dengan JavaScript
+            self.driver.execute_script("""
+                arguments[0].scrollIntoView({
+                    behavior: 'smooth', 
+                    block: 'center', 
+                    inline: 'nearest'
+                });
+            """, radio_button)
+            time.sleep(0.5)
+            
+            # Multiple click strategies
+            click_strategies = [
+                # Metode 1: Selenium click standar
+                lambda: radio_button.click(),
+                
+                # Metode 2: JavaScript click
+                lambda: self.driver.execute_script("arguments[0].click();", radio_button),
+                
+                # Metode 3: Trigger click events
+                lambda: self.driver.execute_script("""
+                    var event = new MouseEvent('click', {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    arguments[0].dispatchEvent(event);
+                """, radio_button)
+            ]
+            
+            # Coba setiap strategi klik
+            for strategy in click_strategies:
+                try:
+                    strategy()
+                    
+                    # Verifikasi pilihan
+                    time.sleep(0.5)
+                    if radio_button.is_selected():
+                        print(f"{Fore.GREEN}✓ Berhasil memilih metode pembayaran kartu kredit/debit!")
+                        return True
+                except Exception as click_error:
+                    print(f"{Fore.YELLOW}⚠ Metode klik gagal: {click_error}")
+            
+            print(f"{Fore.RED}❌ Gagal memilih metode pembayaran!")
+            return False
+        
+        except Exception as e:
+            print(f"{Fore.RED}❌ Kesalahan fatal saat memilih metode pembayaran: {e}")
             return False
 
     def create_account(self):
@@ -1704,6 +2064,24 @@ class SpotifyAutomation:
                 print(f"{Fore.RED}❌ Gagal bypass reCAPTCHA!")
                 return False
             
+            # === TAHAP 7: REDIRECT KE HALAMAN PEMBAYARAN ===
+            # Redirect ke halaman pembayaran/free trial
+            if not self.redirect_to_payment_page():
+                print(f"{Fore.RED}❌ Gagal redirect ke halaman pembayaran!")
+                return False
+            
+            # === TAHAP 8: PILIH METODE PEMBAYARAN ===
+            # Pilih metode pembayaran kartu kredit
+            if not self.select_payment_method():
+                print(f"{Fore.RED}❌ Gagal memilih metode pembayaran!")
+                return False
+            
+            # === TAHAP 9: ISI FORM PEMBAYARAN ===
+            # Isi form pembayaran secara manual
+            if not self.fill_payment_form_manual():
+                print(f"{Fore.RED}❌ Gagal mengisi form pembayaran!")
+                return False
+            
             print(f"{Fore.GREEN}✓ Proses signup dimulai untuk {user_data['email']}")
             return user_data
             
@@ -1772,6 +2150,197 @@ class SpotifyAutomation:
                     self.driver.quit()
                 except:
                     pass
+
+    def fill_payment_form_manual(self):
+        """
+        Metode untuk mengisi form pembayaran kartu kredit secara manual
+        dengan data dari vcc_data.txt menggunakan JavaScript
+        
+        :return: Boolean
+        """
+        try:
+            print(f"{Fore.CYAN}Mengisi form pembayaran kartu kredit...")
+            print(f"{Fore.RED}⚠ PERINGATAN: Hanya untuk tujuan edukasi!")
+            
+            # Tambahkan delay 2 detik
+            print(f"{Fore.YELLOW}Menunggu 2 detik sebelum mengisi form...")
+            time.sleep(2)
+            
+            # Navigasi keyboard
+            try:
+                # Persiapan ActionChains
+                actions = webdriver.ActionChains(self.driver)
+                
+                # Tekan Tab 2 kali
+                for _ in range(2):
+                    actions.send_keys(Keys.TAB).pause(0.5)
+                
+                # Eksekusi navigasi
+                actions.perform()
+                
+                print(f"{Fore.GREEN}✓ Berhasil navigasi keyboard!")
+            
+            except Exception as keyboard_error:
+                print(f"{Fore.YELLOW}⚠ Gagal navigasi keyboard: {keyboard_error}")
+            
+            # Cek apakah ada data VCC
+            if not self.vcc_data:
+                print(f"{Fore.RED}❌ Tidak ada data kartu kredit tersedia!")
+                
+                # Tambahkan data dummy jika tidak ada
+                self.vcc_data.append({
+                    'number': '4596930078139128',
+                    'month': '05',
+                    'year': '2030',
+                    'cvv': '594',
+                    'name': 'Spotify Trial'
+                })
+            
+            # Gunakan data VCC pertama
+            vcc_info = self.vcc_data[0]
+            
+            # Script JavaScript komprehensif untuk mencari dan mengisi form
+            fill_payment_form_script = f"""
+            (function() {{
+                // Fungsi untuk mencari input berdasarkan berbagai kriteria
+                function findInputField(selectors) {{
+                    for (let selector of selectors) {{
+                        let input = document.querySelector(selector);
+                        if (input) return input;
+                    }}
+                    return null;
+                }}
+
+                // Fungsi untuk mengisi input dengan validasi
+                function fillInput(input, value) {{
+                    if (!input) return false;
+                    
+                    // Focus dan clear input
+                    input.focus();
+                    input.value = '';
+                    
+                    // Isi input karakter per karakter
+                    for (let char of value) {{
+                        input.value += char;
+                        
+                        // Trigger events
+                        ['input', 'change'].forEach(eventType => {{
+                            input.dispatchEvent(new Event(eventType, {{ bubbles: true }}));
+                        }});
+                    }}
+                    
+                    return true;
+                }}
+
+                // Daftar selector untuk nomor kartu
+                const cardNumberSelectors = [
+                    'input[placeholder="0000 0000 0000 0000"]',
+                    'input[data-testid="card-number-input"]',
+                    'input[name="cardnumber"]',
+                    '#cardnumber'
+                ];
+
+                // Daftar selector untuk tanggal kadaluarsa
+                const expirySelectors = [
+                    'input[placeholder="MM / YY"]',
+                    'input[data-testid="expiry-date-input"]',
+                    'input[name="expiry"]',
+                    '#expiry-date'
+                ];
+
+                // Daftar selector untuk CVV
+                const cvvSelectors = [
+                    'input[placeholder=" "]',
+                    'input[data-testid="security-code-input"]',
+                    'input[name="security-code"]',
+                    '#security-code'
+                ];
+
+                // Cari input
+                const cardNumberInput = findInputField(cardNumberSelectors);
+                const expiryInput = findInputField(expirySelectors);
+                const cvvInput = findInputField(cvvSelectors);
+
+                // Isi input
+                const cardNumberFilled = fillInput(cardNumberInput, '{vcc_info['number']}');
+                const expiryFilled = fillInput(expiryInput, '{vcc_info['month']} / {vcc_info['year'][-2:]}');
+                const cvvFilled = fillInput(cvvInput, '{vcc_info['cvv']}');
+
+                // Return status
+                return {{
+                    cardNumberFound: !!cardNumberInput,
+                    expiryFound: !!expiryInput,
+                    cvvFound: !!cvvInput,
+                    cardNumberFilled: cardNumberFilled,
+                    expiryFilled: expiryFilled,
+                    cvvFilled: cvvFilled
+                }};
+            }})();
+            """
+            
+            # Eksekusi script JavaScript
+            result = self.driver.execute_script(fill_payment_form_script)
+            
+            # Validasi hasil
+            if not result['cardNumberFound']:
+                print(f"{Fore.RED}❌ Tidak dapat menemukan field nomor kartu!")
+                
+                # Debugging tambahan
+                try:
+                    input_fields = self.driver.find_elements(By.TAG_NAME, 'input')
+                    print(f"{Fore.YELLOW}Input fields yang tersedia:")
+                    for field in input_fields:
+                        print(f"  - ID: {field.get_attribute('id')}")
+                        print(f"  - Name: {field.get_attribute('name')}")
+                        print(f"  - Placeholder: {field.get_attribute('placeholder')}")
+                        print(f"  - Type: {field.get_attribute('type')}")
+                        print(f"  - Class: {field.get_attribute('class')}")
+                        print(f"  - Data-testid: {field.get_attribute('data-testid')}")
+                        print("---")
+                except Exception as debug_error:
+                    print(f"{Fore.YELLOW}Gagal mendapatkan informasi debug: {debug_error}")
+                
+                return False
+            
+            if not result['expiryFound']:
+                print(f"{Fore.RED}❌ Tidak dapat menemukan field tanggal kadaluarsa!")
+                return False
+            
+            if not result['cvvFound']:
+                print(f"{Fore.RED}❌ Tidak dapat menemukan field CVV!")
+                return False
+            
+            # Validasi pengisian
+            if not result['cardNumberFilled']:
+                print(f"{Fore.RED}❌ Gagal mengisi nomor kartu!")
+                return False
+            
+            if not result['expiryFilled']:
+                print(f"{Fore.RED}❌ Gagal mengisi tanggal kadaluarsa!")
+                return False
+            
+            if not result['cvvFilled']:
+                print(f"{Fore.RED}❌ Gagal mengisi CVV!")
+                return False
+            
+            print(f"{Fore.GREEN}✓ Berhasil mengisi form pembayaran!")
+            
+            # Tambahan: Tunggu sebentar
+            time.sleep(1)
+            
+            return True
+        
+        except Exception as e:
+            print(f"{Fore.RED}❌ Kesalahan saat mengisi form pembayaran: {e}")
+            
+            # Tangkap screenshot untuk debugging
+            try:
+                self.driver.save_screenshot("payment_form_error.png")
+                print(f"{Fore.YELLOW}Screenshot error disimpan sebagai payment_form_error.png")
+            except:
+                pass
+            
+            return False
 
 def main():
     print(f"{Fore.RED}{'='*60}")
