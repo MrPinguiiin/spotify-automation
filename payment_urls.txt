@@ -28,3 +28,15 @@ https://payments.spotify.com/checkout/8ddc68e8-6592-3116-a70f-cab7527e5e04/?coun
 https://payments.spotify.com/checkout/8ddc68e8-6592-3116-a70f-cab7527e5e04/?country=AU&market=au&product=default-intro
 https://payments.spotify.com/checkout/da75c714-8538-362d-b92b-7879e941735a/?country=AU&market=au&product=default-intro
 https://payments.spotify.com/checkout/da75c714-8538-362d-b92b-7879e941735a/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/5f44156d-fd58-3953-a236-8524f212d78e/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/5f44156d-fd58-3953-a236-8524f212d78e/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/aca97b67-31b1-36eb-9e65-c9e60b0ca98a/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/aca97b67-31b1-36eb-9e65-c9e60b0ca98a/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/9aa88d49-beba-3e5b-a474-caf50e3b1760/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/9aa88d49-beba-3e5b-a474-caf50e3b1760/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/683ab117-d19e-3172-af76-881e001af380/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/683ab117-d19e-3172-af76-881e001af380/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/7d5130de-a81d-3b89-a558-2144b0df06bf/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/7d5130de-a81d-3b89-a558-2144b0df06bf/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/83873409-2da5-30c5-be7e-dff7b3f7d5fc/?country=AU&market=au&product=default-intro
+https://payments.spotify.com/checkout/83873409-2da5-30c5-be7e-dff7b3f7d5fc/?country=AU&market=au&product=default-intro

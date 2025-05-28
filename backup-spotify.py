@@ -32,11 +32,6 @@ import requests
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.select import Select
 import re
-import zipfile
-import subprocess
-import platform
-import tempfile
-import shutil
 
 # Initialize colorama
 init(autoreset=True)
@@ -58,12 +53,11 @@ def generate_random_username(length=8):
     return ''.join(random.choice(characters) for _ in range(length))
 
 class SpotifyAutomation:
-    def __init__(self, proxy=None, vpn_country='AU', use_proxy=False):
+    def __init__(self, proxy=None, vpn_country='AU'):
         """Initialize the automation class with optional proxy and VPN country"""
         self.driver = None
         self.wait = None
         self.proxy = proxy
-        self.use_proxy = use_proxy
         
         # Normalisasi kode negara
         vpn_country = vpn_country.upper()
@@ -978,7 +972,7 @@ class SpotifyAutomation:
         Cari dan klik tombol terdekat dengan elemen
         
         :param element: WebElement referensi
-        :return: Boolean
+        :return: 
         """
         try:
             # Cari tombol terdekat dengan berbagai strategi
@@ -2100,280 +2094,53 @@ class SpotifyAutomation:
                 pass
             return False
     
-    def setup_driver_options(self):
-        """Setup opsi Chromium driver dengan manipulasi lokasi dan timezone"""
-        options = uc.ChromeOptions()
-        
-        # Basic options
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument('--incognito')
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument('--disable-extensions')
-        
-        # Fix untuk third-party cookies
-        options.add_argument('--disable-blink-features=BlockThirdPartyCookies')
-        options.add_argument('--disable-site-isolation-trials')
-        options.add_argument('--disable-web-security')
-        options.add_argument('--allow-running-insecure-content')
-        
-        # Tambahan opsi untuk cookies
-        prefs = {
-            "profile.default_content_setting_values.cookies": 1,
-            "profile.block_third_party_cookies": False,
-            "profile.default_content_settings.popups": 0,
-            "profile.default_content_settings.cookies": 1,
-            "profile.cookie_controls_mode": 0,
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False
-        }
-        options.add_experimental_option("prefs", prefs)
-        
-        # Timezone dan Lokasi Australia
-        options.add_argument('--lang=en-AU')
-        options.add_argument('--timezone=Australia/Sydney')
-        
-        # User Agent Australia untuk Chromium
-        user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chromium/116.0.0.0 Safari/537.36'
-        options.add_argument(f'--user-agent={user_agent}')
-        
-        # Headers tambahan
-        options.add_argument('--accept-language=en-AU,en;q=0.9')
-        
-        # Setup proxy jika ada
-        if self.proxy:
-            options.add_argument(f'--proxy-server={self.proxy}')
-        
-        # Tambahan opsi untuk menghindari deteksi
-        options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        options.add_experimental_option('useAutomationExtension', False)
-        
-        # Set binary location untuk Chromium
-        options.binary_location = "/usr/bin/chromium-browser"
-        
-        return options
-
-    def download_chromedriver(self, version):
-        """
-        Download dan ekstrak ChromeDriver secara manual
-        """
-        try:
-            print(f"{Fore.CYAN}Mengunduh ChromeDriver secara manual...")
-            
-            # URL untuk Chrome versi baru (115+)
-            base_url = "https://storage.googleapis.com/chrome-for-testing-public"
-            download_url = f"{base_url}/{version}/linux64/chromedriver-linux64.zip"
-            print(f"{Fore.CYAN}Mengunduh dari: {download_url}")
-            
-            # Buat direktori jika belum ada
-            driver_dir = os.path.expanduser("~/.local/bin")
-            os.makedirs(driver_dir, exist_ok=True)
-            
-            # Download dan ekstrak file
-            try:
-                response = requests.get(download_url)
-                if response.status_code != 200:
-                    # Coba URL alternatif jika yang pertama gagal
-                    alt_base_url = "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing"
-                    alt_download_url = f"{alt_base_url}/{version}/linux64/chromedriver-linux64.zip"
-                    print(f"{Fore.YELLOW}Mencoba URL alternatif: {alt_download_url}")
-                    response = requests.get(alt_download_url)
-                    if response.status_code != 200:
-                        raise Exception(f"Gagal mengunduh ChromeDriver: {response.status_code}")
-            except Exception as e:
-                print(f"{Fore.RED}❌ Gagal mengunduh ChromeDriver: {str(e)}")
-                return None
-            
-            # Simpan ke file zip sementara
-            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_file:
-                temp_file.write(response.content)
-                zip_path = temp_file.name
-            
-            # Ekstrak file
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(driver_dir)
-                
-                # Set permission executable
-                chromedriver_path = os.path.join(driver_dir, "chromedriver-linux64", "chromedriver")
-                os.chmod(chromedriver_path, 0o755)
-                
-                # Verifikasi file
-                if not os.path.exists(chromedriver_path):
-                    raise Exception("File ChromeDriver tidak ditemukan setelah ekstraksi")
-                
-                print(f"{Fore.GREEN}✓ ChromeDriver berhasil diunduh dan dipasang di: {chromedriver_path}")
-                return chromedriver_path
-            
-            except Exception as extract_error:
-                print(f"{Fore.RED}❌ Gagal mengekstrak ChromeDriver: {str(extract_error)}")
-                return None
-            
-        except Exception as e:
-            print(f"{Fore.RED}❌ Kesalahan saat download ChromeDriver: {str(e)}")
-            return None
-
-    def get_working_proxy(self):
-        """
-        Mendapatkan proxy Australia yang berfungsi
-        
-        :return: String proxy atau None
-        """
-        try:
-            print(f"{Fore.CYAN}Mencari proxy Australia yang berfungsi...")
-            
-            # Dapatkan daftar proxy
-            proxies = self.get_free_proxies()
-            
-            if not proxies:
-                print(f"{Fore.RED}❌ Tidak ada proxy tersedia!")
-                return None
-            
-            # Test setiap proxy
-            for proxy in proxies:
-                if self.verify_proxy(proxy):
-                    return proxy
-            
-            print(f"{Fore.RED}❌ Tidak ada proxy yang berfungsi!")
-            return None
-            
-        except Exception as e:
-            print(f"{Fore.RED}❌ Error saat mencari proxy: {e}")
-            return None
-
-    def get_proxyscrape_proxies(self):
-        """
-        Mendapatkan daftar proxy dari ProxyScrape
-        
-        :return: List of proxies
-        """
-        try:
-            print(f"{Fore.CYAN}Mengambil proxy dari ProxyScrape...")
-            
-            response = requests.get(
-                "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
-            )
-            
-            if response.status_code == 200:
-                proxies = [f"http://{proxy.strip()}" for proxy in response.text.split('\n') if proxy.strip()]
-                print(f"{Fore.GREEN}✓ Berhasil mendapatkan {len(proxies)} proxy dari ProxyScrape!")
-                return proxies
-            else:
-                print(f"{Fore.RED}❌ Gagal mengambil proxy: Status code {response.status_code}")
-                return []
-                
-        except Exception as e:
-            print(f"{Fore.RED}❌ Error saat mengambil proxy dari ProxyScrape: {e}")
-            return []
-
     def run_automation(self):
         """Run Spotify account creation automation"""
         try:
-            if self.use_proxy:
-                if not self.proxy:
-                    print(f"{Fore.CYAN}Mencari proxy dari ProxyScrape...")
-                    proxies = self.get_proxyscrape_proxies()
-                    if proxies:
-                        for proxy in proxies:
-                            if self.verify_proxy(proxy):
-                                self.proxy = proxy
-                                print(f"{Fore.GREEN}✓ Menggunakan proxy: {proxy}")
-                                break
-                    if not self.proxy:
-                        print(f"{Fore.YELLOW}⚠ Tidak dapat menemukan proxy yang berfungsi! Melanjutkan tanpa proxy...")
-            else:
-                print(f"{Fore.CYAN}Mode tanpa proxy dipilih.")
+            # Setup driver dengan opsi stealth dan incognito
+            options = uc.ChromeOptions()
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--window-size=1920,1080')
+            options.add_argument('--incognito')  # Tambahkan mode incognito
             
-            # Setup driver options
-            options = self.setup_driver_options()
+            # Setup proxy jika ada
+            options = self.setup_proxy(options)
             
+            # Inisiasi driver dengan penanganan kesalahan
             try:
-                # Deteksi sistem dan versi Chromium
-                system = platform.system().lower()
-                machine = platform.machine().lower()
-                print(f"{Fore.CYAN}Sistem terdeteksi: {system} {machine}")
+                # Coba dengan path ChromeDriver manual
+                chromedriver_path = os.path.expanduser('~/.local/bin/chromedriver-linux64/chromedriver')
                 
-                # Deteksi versi Chromium
-                try:
-                    chrome_version = subprocess.check_output(['chromium-browser', '--version']).decode().strip().split()[1]
-                except:
-                    try:
-                        chrome_version = subprocess.check_output(['chromium', '--version']).decode().strip().split()[1]
-                    except:
-                        chrome_version = "116.0.5845.96"  # Default version jika tidak terdeteksi
-                
-                major_version = chrome_version.split('.')[0]
-                print(f"{Fore.CYAN}Versi Chromium terdeteksi: {chrome_version}")
-                
-                # Gunakan ChromeDriver dari sistem
-                chromedriver_path = "/usr/bin/chromedriver"
-                if not os.path.exists(chromedriver_path):
-                    print(f"{Fore.RED}❌ ChromeDriver tidak ditemukan di sistem!")
-                    return False
-                
-                print(f"{Fore.GREEN}✓ Menggunakan ChromeDriver dari sistem: {chromedriver_path}")
-                
-                # Setup service
-                service = Service(executable_path=chromedriver_path)
-                
-                # Inisialisasi driver dengan undetected-chromedriver
-                try:
-                    print(f"{Fore.CYAN}Mencoba inisialisasi dengan undetected-chromedriver...")
-                    options.binary_location = "/usr/bin/chromium-browser"  # Path ke binary Chromium
-                    self.driver = uc.Chrome(
-                        driver_executable_path=chromedriver_path,
-                        options=options,
-                        version_main=int(major_version),
-                        browser_executable_path="/usr/bin/chromium-browser"
-                    )
-                    
-                    # Setup geolocation dan timezone
-                    self.driver.execute_cdp_cmd('Emulation.setTimezoneOverride', {'timezoneId': 'Australia/Sydney'})
-                    self.driver.execute_cdp_cmd('Emulation.setGeolocationOverride', {
-                        'latitude': -33.8688,
-                        'longitude': 151.2093,
-                        'accuracy': 100
-                    })
-                    
-                    # Setup cookies
-                    self.driver.execute_script("""
-                        Object.defineProperty(navigator, 'cookieEnabled', {
-                            get: function() { return true; }
-                        });
-                        document.cookie = "cookies_enabled=1; path=/";
-                    """)
-                    
-                    print(f"{Fore.GREEN}✓ Browser berhasil diinisialisasi dengan undetected-chromedriver")
-                    
-                except Exception as uc_error:
-                    print(f"{Fore.YELLOW}⚠ Gagal menggunakan undetected-chromedriver: {uc_error}")
-                    print(f"{Fore.CYAN}Mencoba metode alternatif dengan Selenium standar...")
-                    
-                    # Fallback ke Selenium standar dengan Chromium
-                    options.binary_location = "/usr/bin/chromium-browser"
-                    self.driver = webdriver.Chrome(service=service, options=options)
-                    print(f"{Fore.GREEN}✓ Browser berhasil diinisialisasi dengan Selenium standar")
-                
-                # Set wait
-                self.wait = WebDriverWait(self.driver, 10)
-                
-                # Jalankan proses pembuatan akun
-                account_data = self.create_account()
-                
-                if account_data:
-                    print(f"{Fore.GREEN}🎉 Akun berhasil dibuat!")
-                    print(f"{Fore.YELLOW}Silakan lanjutkan proses verifikasi secara manual.")
-                
-                # Tunggu input manual untuk melanjutkan proses
-                input(f"{Fore.CYAN}Tekan Enter untuk menutup browser...")
-                
+                # Metode 1: Undetected ChromeDriver
+                self.driver = uc.Chrome(
+                    driver_executable_path=chromedriver_path, 
+                    options=options
+                )
             except Exception as driver_error:
-                print(f"{Fore.RED}❌ Kesalahan fatal saat inisiasi driver: {driver_error}")
-                return False
+                print(f"{Fore.RED}❌ Kesalahan inisiasi driver: {driver_error}")
+                print(f"{Fore.YELLOW}Mencoba metode alternatif...")
+                
+                # Metode alternatif: Gunakan ChromeDriverManager
+                from webdriver_manager.chrome import ChromeDriverManager
+                from selenium.webdriver.chrome.service import Service
+                
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=options)
+            
+            # Jalankan proses pembuatan akun
+            account_data = self.create_account()
+            
+            if account_data:
+                print(f"{Fore.GREEN}🎉 Akun berhasil dibuat!")
+                print(f"{Fore.YELLOW}Silakan lanjutkan proses verifikasi secara manual.")
+            
+            # Tunggu input manual untuk melanjutkan proses
+            input(f"{Fore.CYAN}Tekan Enter untuk menutup browser...")
             
         except Exception as e:
             print(f"{Fore.RED}❌ Automation error: {str(e)}")
+            # Tambahkan detail error untuk debugging
             import traceback
             traceback.print_exc()
         
@@ -2383,6 +2150,156 @@ class SpotifyAutomation:
                     self.driver.quit()
                 except:
                     pass
+
+    def fill_payment_form_manual(self):
+        """
+        Metode untuk mengisi form pembayaran kartu kredit secara manual
+        menggunakan data dari vcc_data.txt dan JavaScript untuk iframe
+        
+        :return: Boolean
+        """
+        try:
+            print(f"{Fore.CYAN}Mengisi form pembayaran kartu kredit...")
+            print(f"{Fore.RED}⚠ PERINGATAN: Hanya untuk tujuan edukasi!")
+            
+            # Tunggu iframe muncul
+            try:
+                iframe = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[title='Card form']"))
+                )
+                print(f"{Fore.GREEN}✓ Iframe form pembayaran ditemukan!")
+            except Exception as e:
+                print(f"{Fore.RED}❌ Iframe form pembayaran tidak ditemukan: {e}")
+                return False
+
+            # Switch ke iframe
+            self.driver.switch_to.frame(iframe)
+            
+            # Pastikan vcc_data tersedia
+            if not hasattr(self, 'vcc_data') or not self.vcc_data:
+                self.vcc_data = [{
+                    'number': '4596930078139128',
+                    'month': '05',
+                    'year': '2030',
+                    'cvv': '594'
+                }]
+            
+            card_data = self.vcc_data[0]
+            
+            # Tunggu form dalam iframe dimuat
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "cardnumber"))
+                )
+            except:
+                print(f"{Fore.RED}❌ Form dalam iframe tidak dimuat!")
+                return False
+
+            # Script JavaScript untuk mengisi form
+            fill_form_script = f"""
+                // Fungsi untuk trigger event
+                function triggerEvent(element, eventType) {{
+                    const event = new Event(eventType, {{ bubbles: true }});
+                    element.dispatchEvent(event);
+                }}
+
+                // Fungsi untuk mengisi input dengan delay
+                async function fillInput(element, value) {{
+                    element.value = '';
+                    for (let char of value) {{
+                        element.value += char;
+                        triggerEvent(element, 'input');
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }}
+                    triggerEvent(element, 'change');
+                }}
+
+                // Fungsi utama pengisian form
+                async function fillForm() {{
+                    const cardNumber = document.getElementById('cardnumber');
+                    const expiryDate = document.getElementById('expiry-date');
+                    const securityCode = document.getElementById('security-code');
+
+                    if (cardNumber && expiryDate && securityCode) {{
+                        await fillInput(cardNumber, '{card_data["number"]}');
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        const expiry = '{card_data["month"]}/{card_data["year"][-2:]}';
+                        await fillInput(expiryDate, expiry);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        await fillInput(securityCode, '{card_data["cvv"]}');
+                        return true;
+                    }}
+                    return false;
+                }}
+
+                return fillForm();
+            """
+
+            # Eksekusi script
+            success = self.driver.execute_script(fill_form_script)
+            
+            if success:
+                print(f"{Fore.GREEN}✓ Berhasil mengisi form pembayaran!")
+            else:
+                print(f"{Fore.RED}❌ Gagal mengisi form pembayaran!")
+                return False
+
+            # Kembali ke frame utama
+            self.driver.switch_to.default_content()
+            
+            # Tunggu 1 detik
+            time.sleep(1)
+            
+            # Klik tombol Complete purchase
+            try:
+                # Coba berbagai selector untuk tombol
+                purchase_button_selectors = [
+                    (By.ID, "checkout_submit"),
+                    (By.CSS_SELECTOR, "button[data-encore-id='buttonPrimary']"),
+                    (By.XPATH, "//button[contains(@class, 'e-9916-button-primary')]"),
+                    (By.XPATH, "//button[contains(text(), 'Complete purchase')]")
+                ]
+                
+                purchase_button = None
+                for selector_type, selector in purchase_button_selectors:
+                    try:
+                        purchase_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((selector_type, selector))
+                        )
+                        break
+                    except:
+                        continue
+                
+                if purchase_button:
+                    # Scroll ke tombol
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
+                    time.sleep(0.5)
+                    
+                    # Klik tombol dengan JavaScript
+                    self.driver.execute_script("arguments[0].click();", purchase_button)
+                    print(f"{Fore.GREEN}✓ Berhasil mengklik tombol Complete purchase!")
+                else:
+                    print(f"{Fore.RED}❌ Tombol Complete purchase tidak ditemukan!")
+                    return False
+                
+            except Exception as e:
+                print(f"{Fore.RED}❌ Gagal mengklik tombol Complete purchase: {e}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"{Fore.RED}❌ Kesalahan saat mengisi form pembayaran: {e}")
+            
+            # Pastikan kembali ke frame utama
+            try:
+                self.driver.switch_to.default_content()
+            except:
+                pass
+                
+            return False
 
 def main():
     print(f"{Fore.RED}{'='*60}")
@@ -2399,24 +2316,14 @@ def main():
         print(f"{Fore.RED}Proses dihentikan.")
         return
     
-    # Tanya penggunaan proxy
-    use_proxy = input(f"{Fore.CYAN}Gunakan proxy? (yes/no): ").lower() == 'yes'
-    
-    proxy = None
-    if use_proxy:
-        # Minta input proxy manual atau otomatis
-        proxy_choice = input(f"{Fore.CYAN}Gunakan proxy manual (m) atau otomatis dari ProxyScrape (a)? (m/a): ").lower()
-        
-        if proxy_choice == 'm':
-            proxy = input(f"{Fore.CYAN}Masukkan proxy (format: ip:port): ").strip()
-        elif proxy_choice != 'a':
-            print(f"{Fore.YELLOW}Pilihan tidak valid. Menggunakan proxy otomatis...")
+    # Minta input proxy opsional
+    proxy_input = input(f"{Fore.CYAN}Masukkan proxy (opsional, format: ip:port): ").strip()
+    proxy = proxy_input if proxy_input else None
     
     # Inisiasi automation
     automation = SpotifyAutomation(
         proxy=proxy, 
-        vpn_country='AU',  # Target negara Australia
-        use_proxy=use_proxy
+        vpn_country='AU'  
     )
     
     automation.run_automation()
